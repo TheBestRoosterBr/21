@@ -144,8 +144,11 @@ class Game:
         # Process wins/losses
         for player in self.state_manager.players:
             if player in winners:
-                self.bet_manager.process_winner(player)
-                self.messages.append(f"{player.name} ganhou com {player.hand.get_value()} pontos!")
+                # Calcular o prêmio (soma de todas as apostas)
+                total_pot = sum(p.current_bet for p in self.state_manager.players)
+                # Atualizar o saldo do vencedor
+                player.win(total_pot)
+                self.messages.append(f"{player.name} ganhou com {player.hand.get_value()} pontos! (Ganhou {total_pot} moedas)")
             else:
                 player.lose()
                 self.messages.append(f"{player.name} perdeu com {player.hand.get_value()} pontos.")
@@ -169,8 +172,11 @@ class Game:
         # Rotate dealer position for fairness
         self.state_manager.dealer_index = (self.state_manager.dealer_index + 1) % len(self.state_manager.players)
 
-        # Start new round
+        # Start new round and verify state
         if self.state_manager.start_new_round():
+            # Verify state was updated correctly
+            if self.state_manager.state != GameState.BETTING:
+                self.state_manager.state = GameState.BETTING
             return True, "New round started"
         else:
             return False, "Failed to start new round"

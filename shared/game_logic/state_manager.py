@@ -38,6 +38,15 @@ class GameStateManager:
         if len(self.players) < 2:
             return False
 
+        # Reset player states
+        for player in self.players:
+            player.reset_hand()
+            player.current_bet = 0
+
+        # Reset current player index
+        self.current_player_index = 0
+
+        # Set state to betting
         self.state = GameState.BETTING
         return True
 

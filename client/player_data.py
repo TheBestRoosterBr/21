@@ -18,6 +18,14 @@ def load_player_data():
         print(f"Erro ao carregar dados dos jogadores: {e}")
         return {}
 
+def get_player_name():
+    """Obter o nome do jogador, usando o primeiro nome do dicionário se disponível"""
+    data = load_player_data()
+    if not data:
+        return "Player"
+    # Retorna o primeiro nome encontrado no dicionário
+    return next(iter(data.keys()), "Player")
+
 def save_player_data(player_data):
     """Salvar dados dos jogadores no arquivo"""
     try:
@@ -42,8 +50,18 @@ def update_player_balance(player_name, new_balance):
     if new_balance <= 0:
         new_balance = 100
     
+    # Garantir que o saldo seja um número inteiro
+    new_balance = int(new_balance)
+    
+    # Atualizar o saldo no dicionário
     player_data[player_name] = new_balance
-    return save_player_data(player_data)
+    
+    # Salvar os dados e verificar se foi bem sucedido
+    if save_player_data(player_data):
+        return True
+    else:
+        print(f"Erro ao atualizar saldo do jogador {player_name}")
+        return False
 
 def check_player_eliminated(player_name, balance):
     """Verificar se um jogador foi eliminado (saldo 0)"""

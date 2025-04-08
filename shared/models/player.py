@@ -25,15 +25,18 @@ class Player:
             amount = self.current_bet * 2
         self.balance += amount
         self.current_bet = 0
+        return self.balance
 
     def lose(self):
         """Player loses the bet"""
         self.current_bet = 0
+        return self.balance
 
     def draw(self):
         """Player draws (ties) - gets bet back"""
         self.balance += self.current_bet
         self.current_bet = 0
+        return self.balance
 
     def can_hit(self):
         """Check if player can request another card"""
