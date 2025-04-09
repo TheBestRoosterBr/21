@@ -33,6 +33,15 @@ class ViewManager:
         except KeyError:
             raise ValueError(f"Invalid view name: {view_name}")
     
+    def reset_view(self, view_name: str):
+        """Limpa o histórico e define uma nova view"""
+        try:
+            new_view = GameView[view_name]
+            self._view_history = []
+            self._current_view = new_view
+        except KeyError:
+            raise ValueError(f"Invalid view name: {view_name}")
+    
     def go_back(self):
         """Return to the previous view"""
         if self._view_history:

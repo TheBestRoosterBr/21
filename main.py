@@ -74,6 +74,24 @@ def main():
     try:
         # Mostrar tela de splash
         show_splash_screen()
+        
+        # Verificar se o servidor de lobby está disponível
+        try:
+            from shared.network.connection_checker import check_server_connection
+            from server.matchmaking import MatchmakingService
+            
+            # Tenta conectar ao servidor de lobby com timeout curto
+            matchmaking = MatchmakingService()
+            success, _ = matchmaking.list_games()
+            
+            if not success:
+                print("AVISO: Servidor de lobby não está disponível.")
+                print("Para jogar online, execute primeiro o servidor com:")
+                print("python server/run_lobby_server.py")
+                print("Continuando no modo offline...")
+        except Exception as server_error:
+            print(f"Erro ao verificar servidor: {server_error}")
+            print("Continuando no modo offline...")
 
         # Iniciar o jogo
         client = BlackjackClient()

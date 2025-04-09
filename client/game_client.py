@@ -35,8 +35,22 @@ class BlackjackClient:
         self.player_name = get_player_name()
         self.player_balance = get_player_balance(self.player_name)
         self.view_manager = ViewManager()
-        self.menu = menu.Menu(self.screen, self.player_name, self.player_balance, self.view_manager)
+        
+        # Verificar disponibilidade do servidor
+        self.server_available = False
+        try:
+            from shared.network.connection_checker import check_server_connection
+            self.server_available = check_server_connection(timeout=0.5)
+        except:
+            pass
+            
+        # Inicializar o serviço de matchmaking
+        self.matchmaking_service = MatchmakingService()
+        
+        self.menu = menu.Menu(self.screen, self.player_name, self.player_balance, self.view_manager, self.server_available)
         self.room = room.Room(self.screen, self.player_name, self.player_balance, self.view_manager)
+        self.room.matchmaking_service = self.matchmaking_service  # Compartilhar a instância
+        self.room.game_client = self  # Adicionar referência ao cliente para acesso ao game_id
 
         self.player = None
         self.dealer = None
@@ -51,10 +65,10 @@ class BlackjackClient:
         self.cursor_visible = True
         self.cursor_timer = 0
         self.p2p_manager = None
-        self.matchmaking_service = MatchmakingService()
         self.game = None
         self.game_state = None
         self.host_mode = False
+        self.game_id = None  # Inicializar game_id
 
         # Fontes
         self.title_font = pygame.font.SysFont("Arial", 48)
@@ -107,7 +121,6 @@ class BlackjackClient:
             self.room.password_input_active = True
             self.room.room_name_input = f"Sala de {self.player_name}"
             self.room.room_name_input_active = False
-            self.room.room_id = self.room.matchmaking_service.generate_room_id()
             self.room.handle_create_room_event(event)
         elif self.view_manager.current_view == "JOIN_ROOM":
             self.room.handle_join_room_event(event)

@@ -1,4 +1,5 @@
 import uuid
+import socket
 
 import pygame
 
@@ -27,7 +28,7 @@ class Room:
         self.player_balance = player_balance
         self.view_manager = view_manager
         self.room_list = []
-        self.room_id = ""
+        self.room_id = ""  # Inicialmente vazio, será definido apenas quando a sala for criada
         self.room_id_input = ""
         self.room_id_input_active = False
         self.room_name_input = ""
@@ -45,11 +46,12 @@ class Room:
         self.game_state = None
         self.p2p_manager = P2PManager()
         self.matchmaking_service = MatchmakingService()
+        self.room_list_status = ""
 
     def render_create_room(self):
-        """Renderizar a tela de criação de sala"""
+        """Renderiza a tela de criar sala"""
         # Background com gradiente
-        self.screen.fill((0, 40, 0))  # Verde-escuro base
+        self.screen.fill((0, 40, 0))  # Verde escuro base
 
         # Área do título
         title_bg = pygame.Rect(0, 0, config.SCREEN_WIDTH, 120)
@@ -60,29 +62,17 @@ class Room:
         title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 60))
         self.screen.blit(title, title_rect)
 
-        # Área central com informações da sala
+        # Área central
         form_width = 500
-        form_height = 420
+        form_height = 300
         form_x = config.SCREEN_WIDTH // 2 - form_width // 2
-        form_y = 140
+        form_y = 150
 
         form_bg = pygame.Rect(form_x, form_y, form_width, form_height)
         pygame.draw.rect(self.screen, (0, 60, 0), form_bg, border_radius=10)
         pygame.draw.rect(self.screen, (0, 100, 0), form_bg, 2, border_radius=10)
 
         y_offset = form_y + 30
-
-        # ID da Sala (gerado automaticamente)
-        id_label = self.medium_font.render("ID da Sala:", True, config.WHITE)
-        self.screen.blit(id_label, (form_x + 30, y_offset))
-
-        id_value = self.large_font.render(self.room_id, True, (255, 220, 0))
-        self.screen.blit(id_value, (form_x + 250, y_offset))
-
-        id_info = self.small_font.render("(Compartilhe este código com seus amigos)", True, (200, 200, 200))
-        self.screen.blit(id_info, (form_x + 30, y_offset + 40))
-
-        y_offset += 80
 
         # Nome da Sala
         name_label = self.medium_font.render("Nome da Sala:", True, config.WHITE)
@@ -110,7 +100,7 @@ class Room:
         y_offset += 100
 
         # Senha
-        password_label = self.medium_font.render("Senha da Sala:", True, config.WHITE)
+        password_label = self.medium_font.render("Senha (opcional):", True, config.WHITE)
         self.screen.blit(password_label, (form_x + 30, y_offset))
 
         # Campo de entrada para a senha
@@ -124,7 +114,7 @@ class Room:
 
         pygame.draw.rect(self.screen, password_border_color, password_box, border_radius=5)
         pygame.draw.rect(self.screen, (240, 240, 240), pygame.Rect(password_box.x + 2, password_box.y + 2,
-                                                                   password_box.width - 4, password_box.height - 4),
+                                                                  password_box.width - 4, password_box.height - 4),
                          border_radius=5)
 
         # Texto da senha (mostrado como asteriscos)
@@ -133,45 +123,35 @@ class Room:
         password_text = self.medium_font.render(password_display + cursor, True, (0, 0, 0))
         self.screen.blit(password_text, (password_box.x + 10, password_box.y + 5))
 
-        password_info = self.small_font.render("Deixe em branco para sala sem senha", True, (200, 200, 200))
-        self.screen.blit(password_info, (form_x + 30, y_offset + 90))
+        y_offset += 100
 
-        y_offset += 140
-
-        # Seleção de modo de conexão
-        mode_label = self.medium_font.render("Modo de Conexão:", True, config.WHITE)
-        self.screen.blit(mode_label, (form_x + 30, y_offset))
-
-        # Opções de modo
-        online_rect = pygame.Rect(form_x + 30, y_offset + 40, 200, 40)
-        local_rect = pygame.Rect(form_x + 270, y_offset + 40, 200, 40)
-
-        # Destacar a opção selecionada
-        if self.view_manager.connection_mode_selection == "online":
-            pygame.draw.rect(self.screen, (0, 120, 210), online_rect, border_radius=5)
-            pygame.draw.rect(self.screen, (0, 80, 0), local_rect, border_radius=5)
+        # ID da Sala
+        if not self.room_id:
+            # Não gere o ID aqui, apenas mostre um placeholder
+            id_text = self.medium_font.render("ID da Sala: Será gerado automaticamente", True, (255, 255, 0))
         else:
-            pygame.draw.rect(self.screen, (0, 80, 0), online_rect, border_radius=5)
-            pygame.draw.rect(self.screen, (0, 120, 210), local_rect, border_radius=5)
-
-        # Texto dos botões
-        online_text = self.medium_font.render("Online", True, config.WHITE)
-        local_text = self.medium_font.render("Rede Local", True, config.WHITE)
-
-        online_text_rect = online_text.get_rect(center=online_rect.center)
-        local_text_rect = local_text.get_rect(center=local_rect.center)
-
-        self.screen.blit(online_text, online_text_rect)
-        self.screen.blit(local_text, local_text_rect)
+            # Mostra o ID já gerado
+            id_text = self.medium_font.render(f"ID da Sala: {self.room_id}", True, (255, 255, 0))
+        
+        self.screen.blit(id_text, (form_x + 30, y_offset))
 
         # Botões de ação
         button_width = 200
         button_height = 50
-        button_y = 600
+        button_y = 500
+
+        # Botão Voltar
+        back_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 310, button_y, button_width, button_height)
+        mouse_pos = pygame.mouse.get_pos()
+        back_color = (100, 100, 100) if back_button.collidepoint(mouse_pos) else (80, 80, 80)
+        pygame.draw.rect(self.screen, back_color, back_button, border_radius=10)
+        pygame.draw.rect(self.screen, config.WHITE, back_button, 2, border_radius=10)
+        back_text = self.medium_font.render("Voltar", True, config.WHITE)
+        back_text_rect = back_text.get_rect(center=back_button.center)
+        self.screen.blit(back_text, back_text_rect)
 
         # Botão Criar
-        create_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 220, button_y, button_width, button_height)
-        mouse_pos = pygame.mouse.get_pos()
+        create_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 110, button_y, button_width, button_height)
         create_color = (0, 150, 0) if create_button.collidepoint(mouse_pos) else (0, 120, 0)
         pygame.draw.rect(self.screen, create_color, create_button, border_radius=10)
         pygame.draw.rect(self.screen, config.WHITE, create_button, 2, border_radius=10)
@@ -179,164 +159,146 @@ class Room:
         create_text_rect = create_text.get_rect(center=create_button.center)
         self.screen.blit(create_text, create_text_rect)
 
-        # Botão Cancelar
-        cancel_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 20, button_y, button_width, button_height)
-        cancel_color = (150, 0, 0) if cancel_button.collidepoint(mouse_pos) else (120, 0, 0)
-        pygame.draw.rect(self.screen, cancel_color, cancel_button, border_radius=10)
-        pygame.draw.rect(self.screen, config.WHITE, cancel_button, 2, border_radius=10)
-        cancel_text = self.medium_font.render("Cancelar", True, config.WHITE)
-        cancel_text_rect = cancel_text.get_rect(center=cancel_button.center)
-        self.screen.blit(cancel_text, cancel_text_rect)
-
-    def handle_create_room_event(self, event):
-        """Manipular eventos na tela de criação de sala"""
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = pygame.mouse.get_pos()
-
-            # Ativar/desativar campos de entrada
-            form_x = config.SCREEN_WIDTH // 2 - 250
-
-            # Campo Nome da Sala
-            name_box = pygame.Rect(form_x + 30, 140 + 120, 440, 40)
-            if name_box.collidepoint(mouse_pos):
-                self.room_name_input_active = True
-                self.password_input_active = False
-
-            # Campo Senha
-            password_box = pygame.Rect(form_x + 30, 140 + 220, 440, 40)
-            if password_box.collidepoint(mouse_pos):
-                self.password_input_active = True
-                self.room_name_input_active = False
-
-            # Botões de modo de conexão
-            online_rect = pygame.Rect(form_x + 30, 140 + 320, 200, 40)
-            local_rect = pygame.Rect(form_x + 270, 140 + 320, 200, 40)
-
-            if online_rect.collidepoint(mouse_pos):
-                self.view_manager.connection_mode_selection = "online"
-            elif local_rect.collidepoint(mouse_pos):
-                self.view_manager.connection_mode_selection = "local"
-
-            # Botões de ação
-            button_width = 200
-            button_height = 50
-            button_y = 600
-
-            # Botão Criar
-            create_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 220, button_y, button_width, button_height)
-            if create_button.collidepoint(mouse_pos):
-                self.create_room()
-
-            # Botão Cancelar
-            cancel_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 20, button_y, button_width, button_height)
-            if cancel_button.collidepoint(mouse_pos):
-                self.view_manager.set_view("MENU")
-
-        # Entrada de teclado para os campos ativos
-        elif event.type == pygame.KEYDOWN:
-            if self.room_name_input_active:
-                if event.key == pygame.K_BACKSPACE:
-                    self.room_name_input = self.room_name_input[:-1]
-                elif event.key == pygame.K_RETURN:
-                    self.room_name_input_active = False
-                elif len(self.room_name_input) < 30:  # Limitar tamanho do nome
-                    if event.unicode.isprintable():
-                        self.room_name_input += event.unicode
-            elif self.password_input_active:
-                if event.key == pygame.K_BACKSPACE:
-                    self.password_input = self.password_input[:-1]
-                elif event.key == pygame.K_RETURN:
-                    self.password_input_active = False
-                elif len(self.password_input) < 20:  # Limitar tamanho da senha
-                    if event.unicode.isprintable():
-                        self.password_input += event.unicode
+        # Exibir mensagens de erro ou sucesso
+        if self.error_message:
+            error_surf = self.medium_font.render(self.error_message, True, (255, 100, 100))
+            error_rect = error_surf.get_rect(center=(config.SCREEN_WIDTH // 2, 570))
+            self.screen.blit(error_surf, error_rect)
+        
+        if self.success_message:
+            success_surf = self.medium_font.render(self.success_message, True, (100, 255, 100))
+            success_rect = success_surf.get_rect(center=(config.SCREEN_WIDTH // 2, 570))
+            self.screen.blit(success_surf, success_rect)
 
     def create_room(self):
-        """Criar uma sala de jogo"""
-        if not self.room_name_input:
-            self.error_message = "O nome da sala não pode estar vazio"
-            self.message_timer = pygame.time.get_ticks()
-            return
+        """Criar uma nova sala"""
+        # Obtém o IP local
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        
         # Criar o jogador
+        from shared.models.player import Player
         self.player = Player(self.player_name, self.player_balance, str(uuid.uuid4()))
-
-        # Criar o jogo
+        
+        # Criar uma nova sala no serviço de matchmaking
+        response = self.matchmaking_service.create_room(
+            host_name=self.player_name,
+            room_name=self.room_name_input,
+            password=self.password_input if self.password_input else None,
+            host_port=5555
+        )
+        
+        if not response[0]:
+            print(f"Erro ao criar sala: {response[1]}")
+            return False
+            
+        room_data = response[1]
+        self.room_id = room_data.get("room_id")
+        
+        # Inicializar P2P como host
+        from shared.network.p2p_manager import P2PManager
+        self.p2p_manager = P2PManager(
+            player_id=self.player.player_id,
+            is_host=True,
+            callback=self.on_message_received,
+            disconnect_callback=self.on_player_disconnected
+        )
+        
+        # Iniciar o servidor P2P
+        self.p2p_manager.start_server(port=5555)
+        
+        # Inicializar o jogo
+        from shared.models.game import Game
         self.game = Game()
         self.game.initialize_game(self.player)
-
-        # Definir o ID da sala
-        self.game.game_id = self.room_id
-        self.game.room_name = self.room_name_input
-        self.game.password = self.password_input
-
-        # Configurar servidor baseado no modo de conexão
-        if self.view_manager.connection_mode == "online":
-            self.setup_online_server()
-        else:
-            self.setup_local_server()
-
-        # Registrar o jogo no serviço de matchmaking
-        # (o método será diferente dependendo do modo selecionado)
-        if self.view_manager.connection_mode == "online":
-            self.register_online_room()
-        else:
-            self.register_local_room()
-
-        # Exibir mensagem de sucesso
-        self.success_message = "Sala criada com sucesso!"
-        self.message_timer = pygame.time.get_ticks()
-
-        # Mover para o lobby
-        self.view_manager.set_view("LOBBY")
+        
+        # Configurar como host
         self.host_mode = True
-        self.game_state = self.game.get_game_state()
+        
+        # Garantir que o game_client tenha a referência do game_id e game
+        if hasattr(self, 'game_client'):
+            self.game_client.game_id = self.room_id
+            self.game_client.game = self.game
+            self.game_client.host_mode = True
+            self.game_client.player = self.player
+            self.game_client.game_state = self.game.get_game_state()
+            self.game_client.p2p_manager = self.p2p_manager
+        
+        print(f"Sala criada com sucesso: ID {self.room_id}")
+        return True
 
-    def setup_online_server(self):
-        """Configurar servidor para conexão online"""
-        # TODO: Implementar servidor online usando sockets
-        # Esta configuração deve permitir conexões pela internet
-        # usando um servidor intermediário ou conexão direta
-        self.p2p_manager = P2PManager(host=True)
-        self.p2p_manager.register_message_callback(self.on_message_received)
-        self.p2p_manager.register_connection_callback(on_player_connected)
-        self.p2p_manager.register_disconnection_callback(self.on_player_disconnected)
-        self.p2p_manager.start()
+    def handle_create_room_event(self, event):
+        """Manipular eventos na tela de criar sala"""
+        if event.type == pygame.KEYDOWN:
+            if self.room_name_input_active:
+                if event.key == pygame.K_RETURN:
+                    self.room_name_input_active = False
+                elif event.key == pygame.K_BACKSPACE:
+                    self.room_name_input = self.room_name_input[:-1]
+                else:
+                    # Adicionar caracter ao nome da sala
+                    if len(self.room_name_input) < 20:  # Limite de 20 caracteres
+                        self.room_name_input += event.unicode
+            
+            elif self.password_input_active:
+                if event.key == pygame.K_RETURN:
+                    self.password_input_active = False
+                elif event.key == pygame.K_BACKSPACE:
+                    self.password_input = self.password_input[:-1]
+                else:
+                    # Adicionar caracter à senha
+                    if len(self.password_input) < 20:  # Limite de 20 caracteres
+                        self.password_input += event.unicode
+        
+        # Cliques do mouse
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_pos = pygame.mouse.get_pos()
+            
+            # Coordenadas do form
+            form_width = 500
+            form_x = config.SCREEN_WIDTH // 2 - form_width // 2
+            form_y = 150
+            
+            # Verifica clique no campo de nome da sala
+            name_box = pygame.Rect(form_x + 30, form_y + 30 + 40, 440, 40)
+            if name_box.collidepoint(event.pos):
+                self.room_name_input_active = True
+                self.password_input_active = False
+            
+            # Verifica clique no campo de senha
+            password_box = pygame.Rect(form_x + 30, form_y + 30 + 100 + 40, 440, 40)
+            if password_box.collidepoint(event.pos):
+                self.password_input_active = True
+                self.room_name_input_active = False
+            
+            # Verifica clique fora dos campos para desativar inputs
+            if not name_box.collidepoint(event.pos) and not password_box.collidepoint(event.pos):
+                self.room_name_input_active = False
+                self.password_input_active = False
+            
+            # Botão Voltar
+            back_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 310, 500, 200, 50)
+            if back_button.collidepoint(event.pos):
+                self.view_manager.set_view("MENU")
+                self.reset_room_data()
+            
+            # Botão Criar Sala
+            create_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 110, 500, 200, 50)
+            if create_button.collidepoint(event.pos):
+                self.create_room()
 
-    def setup_local_server(self):
-        """Configurar servidor para conexão em rede local"""
-        # TODO: Implementar servidor local usando sockets
-        # Esta configuração deve descobrir automaticamente
-        # jogadores na mesma rede local
-        self.p2p_manager = P2PManager(host=True, port=5555)
-        self.p2p_manager.register_message_callback(self.on_message_received)
-        self.p2p_manager.register_connection_callback(on_player_connected)
-        self.p2p_manager.register_disconnection_callback(self.on_player_disconnected)
-        self.p2p_manager.start()
-
-    def register_online_room(self):
-        """Registrar a sala no serviço de matchmaking online"""
-        # TODO: Implementar registro no servidor de matchmaking online
-        success, game_id, lobby = self.matchmaking_service.create_game(
-            self.player_name,
-            room_name=self.room_name_input,
-            password=self.password_input
-        )
-
-        if success:
-            self.game.game_id = game_id
-        else:
-            self.error_message = f"Erro ao criar sala: {lobby}"
-            self.message_timer = pygame.time.get_ticks()
-
-    def register_local_room(self):
-        """Registrar a sala para descoberta na rede local"""
-        # TODO: Implementar broadcast na rede local para anunciar a sala
-        # Usar sockets UDP para broadcast na rede local
-        success, game_id, lobby = self.matchmaking_service.create_local_game(
-            self.player_name,
-            room_name=self.room_name_input,
-            password=self.password_input
-        )
+    def reset_room_data(self):
+        """Reseta os dados da sala"""
+        self.room_name_input = ""
+        self.password_input = ""
+        self.room_id = ""
+        self.room_name_input_active = False
+        self.password_input_active = False
+        self.error_message = ""
+        self.success_message = ""
+        self.show_error = False
+        self.show_success = False
+        self.timer_redirect = None
 
     def render_join_room(self):
         """Renderizar a tela para juntar-se a uma sala específica usando o ID"""
@@ -427,7 +389,7 @@ class Room:
         local_rect = pygame.Rect(form_x + 270, y_offset + 40, 200, 40)
 
         # Destacar a opção selecionada
-        if self.view_manager.connection_mode_selection == "online":
+        if self.view_manager.connection_mode == "online":
             pygame.draw.rect(self.screen, (0, 120, 210), online_rect, border_radius=5)
             pygame.draw.rect(self.screen, (0, 80, 0), local_rect, border_radius=5)
         else:
@@ -465,412 +427,349 @@ class Room:
         pygame.draw.rect(self.screen, join_color, join_button, border_radius=10)
 
     def render_room_browser(self):
-        """Renderizar a tela de navegação de salas disponíveis"""
-        # Background com gradiente
-        self.screen.fill((0, 40, 0))  # Verde escuro base
-
-        # Área do título
-        title_bg = pygame.Rect(0, 0, config.SCREEN_WIDTH, 120)
-        pygame.draw.rect(self.screen, (0, 30, 0), title_bg)
-
+        """Renderizar o navegador de salas"""
+        # Background
+        self.screen.fill(config.GREEN)
+        
         # Título
-        mode_text = "Online" if self.view_manager.connection_mode == "online" else "Rede Local"
-        title = self.title_font.render(f"Salas Disponíveis ({mode_text})", True, (240, 240, 240))
-        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 60))
-        self.screen.blit(title, title_rect)
-
-        # Botão de Atualizar
-        refresh_button = pygame.Rect(config.SCREEN_WIDTH - 160, 60, 120, 40)
-        mouse_pos = pygame.mouse.get_pos()
-        refresh_color = (0, 130, 200) if refresh_button.collidepoint(mouse_pos) else (0, 100, 170)
-        pygame.draw.rect(self.screen, refresh_color, refresh_button, border_radius=10)
+        title = self.large_font.render("Buscar Salas", True, config.WHITE)
+        self.screen.blit(title, (config.SCREEN_WIDTH // 2 - title.get_width() // 2, 20))
+        
+        # Tipo de conexão
+        if self.view_manager.connection_mode == "online":
+            connection_text = self.medium_font.render("Modo Online", True, config.WHITE)
+        else:
+            connection_text = self.medium_font.render("Modo Local", True, config.WHITE)
+        self.screen.blit(connection_text, (config.SCREEN_WIDTH - connection_text.get_width() - 20, 20))
+        
+        # Status
+        status_text = self.medium_font.render(self.room_list_status, True, config.WHITE)
+        self.screen.blit(status_text, (20, 80))
+        
+        # Lista de salas
+        list_x = 40
+        list_y = 130
+        list_width = config.SCREEN_WIDTH - 80
+        list_height = config.SCREEN_HEIGHT - 250
+        
+        # Fundo da lista
+        pygame.draw.rect(self.screen, (0, 50, 0), (list_x, list_y, list_width, list_height))
+        pygame.draw.rect(self.screen, config.WHITE, (list_x, list_y, list_width, list_height), 2)
+        
+        # Cabeçalho da lista
+        header_height = 40
+        pygame.draw.rect(self.screen, (0, 70, 0), (list_x, list_y, list_width, header_height))
+        
+        # Textos do cabeçalho
+        headers = ["ID", "Nome da Sala", "Host", "Jogadores", "Senha"]
+        header_widths = [80, 240, 180, 100, 80]
+        header_x = list_x + 10
+        
+        for i, header in enumerate(headers):
+            header_text = self.small_font.render(header, True, config.WHITE)
+            self.screen.blit(header_text, (header_x, list_y + 10))
+            header_x += header_widths[i]
+        
+        # Linhas da lista
+        if self.room_list:
+            visible_items = min(8, len(self.room_list))
+            item_height = 50
+            
+            for i in range(visible_items):
+                room = self.room_list[i]
+                row_y = list_y + header_height + (i * item_height)
+                
+                # Destaque para a sala selecionada
+                if i == self.selected_room_index:
+                    pygame.draw.rect(self.screen, (0, 100, 0), (list_x, row_y, list_width, item_height))
+                
+                # Linha divisória
+                pygame.draw.line(self.screen, (0, 80, 0), (list_x, row_y), (list_x + list_width, row_y))
+                
+                # Desenhar os dados da sala
+                room_id = room.get("room_id", "N/A")
+                room_name = room.get("room_name", "Sem nome")
+                host_name = room.get("host_name", "Desconhecido")
+                players = len(room.get("players", []))
+                has_password = "Sim" if room.get("has_password", False) else "Não"
+                
+                # Textos da sala
+                item_x = list_x + 10
+                item_y = row_y + 15
+                
+                # ID
+                id_text = self.small_font.render(str(room_id), True, config.WHITE)
+                self.screen.blit(id_text, (item_x, item_y))
+                item_x += header_widths[0]
+                
+                # Nome
+                name_text = self.small_font.render(room_name, True, config.WHITE)
+                self.screen.blit(name_text, (item_x, item_y))
+                item_x += header_widths[1]
+                
+                # Host
+                host_text = self.small_font.render(host_name, True, config.WHITE)
+                self.screen.blit(host_text, (item_x, item_y))
+                item_x += header_widths[2]
+                
+                # Jogadores
+                players_text = self.small_font.render(str(players), True, config.WHITE)
+                self.screen.blit(players_text, (item_x, item_y))
+                item_x += header_widths[3]
+                
+                # Senha
+                password_text = self.small_font.render(has_password, True, config.WHITE)
+                self.screen.blit(password_text, (item_x, item_y))
+        else:
+            # Mensagem de nenhuma sala encontrada
+            no_rooms_text = self.medium_font.render("Nenhuma sala encontrada", True, config.WHITE)
+            no_rooms_x = list_x + (list_width // 2) - (no_rooms_text.get_width() // 2)
+            no_rooms_y = list_y + (list_height // 2) - (no_rooms_text.get_height() // 2)
+            self.screen.blit(no_rooms_text, (no_rooms_x, no_rooms_y))
+        
+        # Botões
+        button_y = list_y + list_height + 20
+        button_width = 180
+        button_height = 50
+        button_spacing = 20
+        
+        # Botão de atualizar
+        refresh_button = pygame.Rect(list_x, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, (0, 100, 180), refresh_button, border_radius=10)
         pygame.draw.rect(self.screen, config.WHITE, refresh_button, 2, border_radius=10)
-        refresh_text = self.small_font.render("Atualizar", True, config.WHITE)
+        refresh_text = self.medium_font.render("Atualizar", True, config.WHITE)
         refresh_text_rect = refresh_text.get_rect(center=refresh_button.center)
         self.screen.blit(refresh_text, refresh_text_rect)
-
-        # Área central com a lista de salas
-        list_width = 800
-        list_height = 400
-        list_x = config.SCREEN_WIDTH // 2 - list_width // 2
-        list_y = 150
-
-        list_bg = pygame.Rect(list_x, list_y, list_width, list_height)
-        pygame.draw.rect(self.screen, (0, 60, 0), list_bg, border_radius=10)
-        pygame.draw.rect(self.screen, (0, 100, 0), list_bg, 2, border_radius=10)
-
-        # Cabeçalhos da lista
-        header_y = list_y + 20
-        headers = [
-            {"text": "ID", "x": list_x + 50, "width": 100},
-            {"text": "Nome da Sala", "x": list_x + 150, "width": 300},
-            {"text": "Jogadores", "x": list_x + 470, "width": 100},
-            {"text": "Protegida", "x": list_x + 590, "width": 120},
-            {"text": "", "x": list_x + 720, "width": 80}  # Coluna para o botão Entrar
-        ]
-
-        for header in headers:
-            text = self.medium_font.render(header["text"], True, (220, 220, 220))
-            self.screen.blit(text, (header["x"], header_y))
-
-        # Desenhar linha de separação
-        pygame.draw.line(self.screen, (0, 100, 0), (list_x + 20, header_y + 40),
-                         (list_x + list_width - 20, header_y + 40), 2)
-
-        # Mensagem se não houver salas
-        if not self.room_list:
-            no_rooms_text = self.medium_font.render("Nenhuma sala disponível", True, (200, 200, 200))
-            no_rooms_rect = no_rooms_text.get_rect(center=(list_x + list_width // 2, list_y + list_height // 2))
-            self.screen.blit(no_rooms_text, no_rooms_rect)
-        else:
-            # Lista de salas
-            item_height = 50
-            visible_items = 6  # Número de itens visíveis na tela
-            start_index = self.room_browser_scroll
-            end_index = min(start_index + visible_items, len(self.room_list))
-
-            for i in range(start_index, end_index):
-                room = self.room_list[i]
-                item_y = header_y + 60 + (i - start_index) * item_height
-
-                # Destacar a sala selecionada
-                if i == self.selected_room_index:
-                    selection_rect = pygame.Rect(list_x + 10, item_y - 5, list_width - 20, item_height)
-                    pygame.draw.rect(self.screen, (0, 80, 0), selection_rect, border_radius=5)
-
-                # ID da sala
-                id_text = self.medium_font.render(room["id"], True, config.WHITE)
-                self.screen.blit(id_text, (list_x + 50, item_y))
-
-                # Nome da sala
-                name_text = self.medium_font.render(room["name"], True, config.WHITE)
-                self.screen.blit(name_text, (list_x + 150, item_y))
-
-                # Número de jogadores
-                players_text = self.medium_font.render(f"{room['player_count']}/8", True, config.WHITE)
-                self.screen.blit(players_text, (list_x + 470, item_y))
-
-                # Indicação se tem senha
-                has_password = room.get("has_password", False)
-                password_text = self.medium_font.render("Sim" if has_password else "Não", True,
-                                                        (255, 150, 150) if has_password else (150, 255, 150))
-                self.screen.blit(password_text, (list_x + 590, item_y))
-
-                # Botão Entrar
-                join_button = pygame.Rect(list_x + 720, item_y - 5, 60, 30)
-                join_color = (0, 150, 0) if join_button.collidepoint(mouse_pos) else (0, 120, 0)
-                pygame.draw.rect(self.screen, join_color, join_button, border_radius=5)
-                pygame.draw.rect(self.screen, config.WHITE, join_button, 1, border_radius=5)
-                join_text = self.small_font.render("Entrar", True, config.WHITE)
-                join_text_rect = join_text.get_rect(center=join_button.center)
-                self.screen.blit(join_text, join_text_rect)
-
-            # Controles de scroll
-            if len(self.room_list) > visible_items:
-                # Botão para cima
-                up_button = pygame.Rect(list_x + list_width - 40, list_y + 20, 30, 30)
-                up_color = (0, 130, 200) if up_button.collidepoint(mouse_pos) else (0, 100, 170)
-                pygame.draw.rect(self.screen, up_color, up_button, border_radius=5)
-                up_text = self.medium_font.render("▲", True, config.WHITE)
-                up_text_rect = up_text.get_rect(center=up_button.center)
-                self.screen.blit(up_text, up_text_rect)
-
-                # Botão para baixo
-                down_button = pygame.Rect(list_x + list_width - 40, list_y + list_height - 50, 30, 30)
-                down_color = (0, 130, 200) if down_button.collidepoint(mouse_pos) else (0, 100, 170)
-                pygame.draw.rect(self.screen, down_color, down_button, border_radius=5)
-                down_text = self.medium_font.render("▼", True, config.WHITE)
-                down_text_rect = down_text.get_rect(center=down_button.center)
-                self.screen.blit(down_text, down_text_rect)
-
-        # Botões de alternância de modo
-        mode_y = list_y + list_height + 20
-
-        # Botão de modo Online
-        online_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 220, mode_y, 200, 40)
-        online_color = (0, 120, 210) if self.view_manager.connection_mode == "online" else (0, 80, 0)
-        pygame.draw.rect(self.screen, online_color, online_button, border_radius=10)
-        pygame.draw.rect(self.screen, config.WHITE, online_button, 2 if self.view_manager.connection_mode == "online" else 1,
-                         border_radius=10)
-        online_text = self.medium_font.render("Online", True, config.WHITE)
-        online_text_rect = online_text.get_rect(center=online_button.center)
-        self.screen.blit(online_text, online_text_rect)
-
-        # Botão de modo Rede Local
-        local_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 20, mode_y, 200, 40)
-        local_color = (0, 120, 210) if self.view_manager.connection_mode == "local" else (0, 80, 0)
-        pygame.draw.rect(self.screen, local_color, local_button, border_radius=10)
-        pygame.draw.rect(self.screen, config.WHITE, local_button, 2 if self.view_manager.connection_mode == "local" else 1,
-                         border_radius=10)
-        local_text = self.medium_font.render("Rede Local", True, config.WHITE)
-        local_text_rect = local_text.get_rect(center=local_button.center)
-        self.screen.blit(local_text, local_text_rect)
-
-        # Botões de ação
-        button_width = 200
-        button_height = 50
-        button_y = 650
-
-        # Botão Criar Sala
-        create_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 310, button_y, button_width, button_height)
-        create_color = (0, 150, 100) if create_button.collidepoint(mouse_pos) else (0, 120, 80)
-        pygame.draw.rect(self.screen, create_color, create_button, border_radius=10)
-        pygame.draw.rect(self.screen, config.WHITE, create_button, 2, border_radius=10)
-        create_text = self.medium_font.render("Criar Sala", True, config.WHITE)
-        create_text_rect = create_text.get_rect(center=create_button.center)
-        self.screen.blit(create_text, create_text_rect)
-
-        # Botão Entrar com ID
-        join_id_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 100, button_y, button_width, button_height)
-        join_id_color = (0, 130, 180) if join_id_button.collidepoint(mouse_pos) else (0, 100, 150)
-        pygame.draw.rect(self.screen, join_id_color, join_id_button, border_radius=10)
+        
+        # Botão de entrar
+        join_button = pygame.Rect(list_x + button_width + button_spacing, button_y, button_width, button_height)
+        join_color = (0, 150, 0) if self.selected_room_index >= 0 else (100, 100, 100)
+        pygame.draw.rect(self.screen, join_color, join_button, border_radius=10)
+        pygame.draw.rect(self.screen, config.WHITE, join_button, 2, border_radius=10)
+        join_text = self.medium_font.render("Entrar", True, config.WHITE)
+        join_text_rect = join_text.get_rect(center=join_button.center)
+        self.screen.blit(join_text, join_text_rect)
+        
+        # Botão de entrar com ID
+        join_id_button = pygame.Rect(join_button.right + button_spacing, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, (150, 100, 0), join_id_button, border_radius=10)
         pygame.draw.rect(self.screen, config.WHITE, join_id_button, 2, border_radius=10)
         join_id_text = self.medium_font.render("Entrar com ID", True, config.WHITE)
         join_id_text_rect = join_id_text.get_rect(center=join_id_button.center)
         self.screen.blit(join_id_text, join_id_text_rect)
-
-        # Botão Voltar
-        back_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 110, button_y, button_width, button_height)
-        back_color = (150, 0, 0) if back_button.collidepoint(mouse_pos) else (120, 0, 0)
-        pygame.draw.rect(self.screen, back_color, back_button, border_radius=10)
+        
+        # Botão de voltar
+        back_button = pygame.Rect(join_id_button.right + button_spacing, button_y, button_width, button_height)
+        pygame.draw.rect(self.screen, (150, 0, 0), back_button, border_radius=10)
         pygame.draw.rect(self.screen, config.WHITE, back_button, 2, border_radius=10)
         back_text = self.medium_font.render("Voltar", True, config.WHITE)
         back_text_rect = back_text.get_rect(center=back_button.center)
         self.screen.blit(back_text, back_text_rect)
 
     def handle_room_browser_event(self, event):
-        """Manipular eventos na tela de lista de salas"""
+        """Lidar com eventos no navegador de salas"""
         if event.type == pygame.MOUSEBUTTONDOWN:
             mouse_pos = pygame.mouse.get_pos()
-
-            # Botão de Atualizar
-            refresh_button = pygame.Rect(config.SCREEN_WIDTH - 160, 60, 120, 40)
-            if refresh_button.collidepoint(mouse_pos):
-                self.load_room_list(self.view_manager.connection_mode)
-                return
-
-            # Área da lista de salas
-            list_width = 800
-            list_height = 400
-            list_x = config.SCREEN_WIDTH // 2 - list_width // 2
-            list_y = 150
-
-            # Verificar clique em salas
-            if self.room_list:
+            
+            # Lista de salas
+            list_x = 40
+            list_y = 130
+            list_width = config.SCREEN_WIDTH - 80
+            list_height = config.SCREEN_HEIGHT - 250
+            header_height = 40
+            
+            # Verificar cliques na lista
+            if (list_x <= mouse_pos[0] <= list_x + list_width and
+                list_y + header_height <= mouse_pos[1] <= list_y + list_height):
+                
+                # Calcular o índice da sala clicada
                 item_height = 50
-                visible_items = 6
-                start_index = self.room_browser_scroll
-                end_index = min(start_index + visible_items, len(self.room_list))
-
-                for i in range(start_index, end_index):
-                    item_y = list_y + 80 + (i - start_index) * item_height
-
-                    # Seleção da sala
-                    selection_area = pygame.Rect(list_x + 10, item_y - 5, list_width - 100, item_height)
-                    if selection_area.collidepoint(mouse_pos):
-                        self.selected_room_index = i
-
-                    # Botão Entrar
-                    join_button = pygame.Rect(list_x + 720, item_y - 5, 60, 30)
-                    if join_button.collidepoint(mouse_pos):
-                        self.join_selected_room(i)
-                        return
-
-            # Controles de scroll
-            if len(self.room_list) > 6:
-                # Botão para cima
-                up_button = pygame.Rect(list_x + list_width - 40, list_y + 20, 30, 30)
-                if up_button.collidepoint(mouse_pos) and self.room_browser_scroll > 0:
-                    self.room_browser_scroll -= 1
-                    return
-
-                # Botão para baixo
-                down_button = pygame.Rect(list_x + list_width - 40, list_y + list_height - 50, 30, 30)
-                if down_button.collidepoint(mouse_pos) and self.room_browser_scroll < len(self.room_list) - 6:
-                    self.room_browser_scroll += 1
-                    return
-
-            # Botões de alternância de modo
-            mode_y = list_y + list_height + 20
-
-            # Botão de modo Online
-            online_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 220, mode_y, 200, 40)
-            if online_button.collidepoint(mouse_pos) and self.view_manager.connection_mode != "online":
-                self.view_manager.connection_mode = "online"
-                self.load_room_list("online")
-                return
-
-            # Botão de modo Rede Local
-            local_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 20, mode_y, 200, 40)
-            if local_button.collidepoint(mouse_pos) and self.view_manager.connection_mode != "local":
-                self.view_manager.connection_mode = "local"
-                self.load_room_list("local")
-                return
-
-            # Botões de ação
-            button_width = 200
+                clicked_index = (mouse_pos[1] - (list_y + header_height)) // item_height
+                
+                if self.room_list and 0 <= clicked_index < len(self.room_list):
+                    self.selected_room_index = clicked_index
+                    print(f"Sala selecionada: {self.room_list[self.selected_room_index]['room_name']}")
+            
+            # Botões
+            button_y = list_y + list_height + 20
+            button_width = 180
             button_height = 50
-            button_y = 650
-
-            # Botão Criar Sala
-            create_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 310, button_y, button_width, button_height)
-            if create_button.collidepoint(mouse_pos):
-                self.handle_create_room_click()
+            button_spacing = 20
+            
+            # Botão de atualizar
+            refresh_button = pygame.Rect(list_x, button_y, button_width, button_height)
+            if refresh_button.collidepoint(mouse_pos):
+                self.load_room_list(mode=self.view_manager.connection_mode)
                 return
-
-            # Botão Entrar com ID
-            join_id_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 100, button_y, button_width, button_height)
+                
+            # Botão de entrar
+            join_button = pygame.Rect(list_x + button_width + button_spacing, button_y, button_width, button_height)
+            if join_button.collidepoint(mouse_pos) and self.selected_room_index >= 0:
+                self.join_selected_room(self.selected_room_index)
+                return
+                
+            # Botão de entrar com ID
+            join_id_button = pygame.Rect(join_button.right + button_spacing, button_y, button_width, button_height)
             if join_id_button.collidepoint(mouse_pos):
                 self.view_manager.set_view("JOIN_ROOM")
                 return
-
-            # Botão Voltar
-            back_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 110, button_y, button_width, button_height)
+                
+            # Botão de voltar
+            back_button = pygame.Rect(join_id_button.right + button_spacing, button_y, button_width, button_height)
             if back_button.collidepoint(mouse_pos):
-                self.view_manager.set_view("MENU")
+                self.view_manager.go_back()
                 return
 
-    def handle_create_room_click(self):
-        """Manipular clique no botão Criar Sala"""
-        if not self.player_name:
-            self.player_name = "Player"
-            self.player_balance = get_player_balance(self.player_name)
-        self.view_manager.set_view("CREATE_ROOM")
-
-        self.view_manager.connection_mode = "online"  # Padrão: online
-
     def load_room_list(self, mode="online"):
-        """Carregar a lista de salas disponíveis"""
-        self.view_manager.connection_mode = mode
-        self.selected_room_index = -1
-        self.room_browser_scroll = 0
-
+        """Carregar lista de salas disponíveis"""
+        self.room_list = []
+        self.room_list_status = "Carregando..."
+        
         if mode == "online":
-            # Buscar salas online
-            success, rooms = self.matchmaking_service.list_games()
-            if success:
-                self.room_list = []
-                for room in rooms:
-                    self.room_list.append({
-                        "id": room["game_id"],
-                        "name": room.get("room_name", f"Sala de {room['host_name']}"),
-                        "player_count": len(room["players"]),
-                        "has_password": room.get("has_password", False),
-                        "host_address": room["host_address"],
-                        "host_name": room["host_name"]
-                    })
-            else:
-                self.error_message = "Não foi possível buscar as salas online"
-                self.message_timer = pygame.time.get_ticks()
+            try:
+                # Obter lista de salas do serviço de matchmaking
+                success, response = self.matchmaking_service.list_games()
+                
+                if not success:
+                    self.room_list_status = f"Erro ao carregar salas: {response}"
+                    return
+                    
+                # Verificar se há salas disponíveis
+                if "rooms" in response and response["rooms"]:
+                    # Processar cada sala
+                    for room in response["rooms"]:
+                        # Adiciona o id na room para compatibilidade
+                        room["id"] = room["room_id"]
+                        self.room_list.append(room)
+                    
+                    # Atualizar status
+                    self.room_list_status = f"{len(self.room_list)} sala(s) encontrada(s)"
+                else:
+                    self.room_list_status = "Nenhuma sala disponível"
+            except Exception as e:
+                self.room_list_status = f"Erro: {str(e)}"
+                import traceback
+                traceback.print_exc()
         else:
-            # Buscar salas na rede local usando broadcast UDP
-            success, rooms = self.matchmaking_service.list_local_games()
-            if success:
-                self.room_list = []
-                for room in rooms:
-                    self.room_list.append({
-                        "id": room["game_id"],
-                        "name": room.get("room_name", f"Sala de {room['host_name']}"),
-                        "player_count": len(room["players"]),
-                        "has_password": room.get("has_password", False),
-                        "host_address": room["host_address"],
-                        "host_name": room["host_name"]
-                    })
-            else:
-                self.error_message = "Não foi possível buscar as salas na rede local"
-                self.message_timer = pygame.time.get_ticks()
+            # Modo local para testes
+            self.room_list_status = "Modo local - teste apenas"
+            # Adicionar algumas salas de teste
+            self.room_list = [
+                {
+                    "id": "1234",
+                    "room_id": "1234",
+                    "host_name": "Jogador Local",
+                    "room_name": "Sala Local 1",
+                    "players": ["Jogador Local"],
+                    "has_password": False
+                }
+            ]
+            
+        # Atualizar a seleção
+        self.selected_room_index = -1
 
     def join_selected_room(self, room_index):
         """Entrar na sala selecionada"""
-        if not self.room_list or room_index < 0 or room_index >= len(self.room_list):
-            return
-
-        room = self.room_list[room_index]
-
-        # Se a sala tem senha, mostrar tela para digitar a senha
-        if room.get("has_password", False):
-            self.room_id_input = room["id"]
-            self.password_input = ""
-            self.password_input_active = True
-            self.room_id_input_active = False
-            self.view_manager.set_view("JOIN_ROOM")
-            return
-
-        # Se não tem senha, entrar diretamente
-        # Criar o jogador
-        self.player = Player(self.player_name, self.player_balance, str(uuid.uuid4()))
-
-        # Conectar à sala
-        success = False
-        if self.view_manager.connection_mode == "online":
-            success = self.connect_to_online_room(room["id"], "")
-        else:
-            success = self.connect_to_local_room(room["id"], "")
-
-        if success:
-            self.view_manager.set_view("LOBBY")
-            self.host_mode = False
-            self.success_message = "Conectado à sala com sucesso!"
-            self.message_timer = pygame.time.get_ticks()
-        else:
-            self.error_message = "Não foi possível conectar à sala. Tente novamente."
-            self.message_timer = pygame.time.get_ticks()
+        if self.room_list and 0 <= room_index < len(self.room_list):
+            selected_room = self.room_list[room_index]
+            room_id = selected_room.get("room_id", selected_room.get("id"))
+            has_password = selected_room.get("has_password", False)
+            
+            # Se a sala tiver senha, exibir prompt de senha
+            if has_password:
+                self.joining_room_id = room_id
+                self.view_manager.set_view("JOIN_ROOM")
+                return
+                
+            # Se não tiver senha, conectar diretamente
+            if self.view_manager.connection_mode == "online":
+                success = self.connect_to_online_room(room_id)
+                if success:
+                    self.view_manager.set_view("LOBBY")
+                else:
+                    print("Falha ao conectar à sala online")
+            else:
+                success = self.connect_to_local_room(room_id)
+                if success:
+                    self.view_manager.set_view("LOBBY")
+                else:
+                    print("Falha ao conectar à sala local")
 
     def connect_to_online_room(self, room_id, password=""):
-        """Conectar a uma sala online usando o ID da sala"""
-        # Verificar se o ID da sala foi informado
-        if not room_id:
-            self.error_message = "ID da sala não informado"
-            self.message_timer = pygame.time.get_ticks()
+        """Conectar-se a uma sala online"""
+        try:
+            # Verificar se a sala existe
+            join_response = self.matchmaking_service.join_room(
+                room_id=room_id,
+                player_name=self.player_name,
+                password=password
+            )
+            
+            if not join_response[0]:
+                print(f"Erro ao entrar na sala: {join_response[1]}")
+                return False
+                
+            room_data = join_response[1].get("room", {})
+            self.room_id = room_id
+            self.room_name = room_data.get("room_name", f"Sala {room_id}")
+            self.host_name = room_data.get("host_name", "Desconhecido")
+            self.host_address = room_data.get("host_address", "")
+            
+            # Se for o host, não precisa se conectar
+            if self.host_name == self.player_name:
+                print("Você é o host desta sala.")
+                return True
+                
+            # Extrair IP e porta do endereço do host
+            if ":" in self.host_address:
+                host_ip, host_port = self.host_address.split(":")
+                host_port = int(host_port)
+            else:
+                print("Formato de endereço de host inválido")
+                return False
+                
+            # Criar jogador
+            from shared.models.player import Player
+            self.player = Player(self.player_name, self.player_balance, str(uuid.uuid4()))
+            
+            # Inicializar o gerenciador P2P
+            from shared.network.p2p_manager import P2PManager
+            self.p2p_manager = P2PManager(
+                player_id=self.player.player_id,
+                callback=self.on_message_received,
+                disconnect_callback=self.on_player_disconnected
+            )
+            
+            # Conectar ao host
+            self.p2p_manager.connect_to_host(host_ip, host_port)
+            
+            # Enviar mensagem de conexão
+            from shared.network.message import Message, MessageType
+            connection_message = Message.create_connection_message(
+                player_id=self.player.player_id,
+                player_data={
+                    "name": self.player_name,
+                    "balance": self.player_balance
+                }
+            )
+            self.p2p_manager.send_message(connection_message)
+            
+            print(f"Conectado à sala {room_id} em {host_ip}:{host_port}")
+            
+            # Entrar na sala (lobby)
+            self.view_manager.set_view("LOBBY")
+            
+            # Garantir que o game_client tenha a referência do game_id
+            if hasattr(self, 'game_client'):
+                self.game_client.game_id = room_id
+            
+            return True
+            
+        except Exception as e:
+            print(f"Erro ao conectar à sala online: {e}")
+            import traceback
+            traceback.print_exc()
             return False
-
-        # Obter informações da sala do serviço de matchmaking
-        success, room_info = self.matchmaking_service.get_room_info(room_id)
-        if not success:
-            self.error_message = "Sala não encontrada"
-            self.message_timer = pygame.time.get_ticks()
-            return False
-
-        # Verificar senha se necessário
-        if room_info.get("has_password", False) and room_info.get("password") != password:
-            self.error_message = "Senha incorreta"
-            self.message_timer = pygame.time.get_ticks()
-            return False
-
-        # Obter endereço do host
-        host_address = room_info.get("host_address")
-        if not host_address:
-            self.error_message = "Endereço do host não disponível"
-            self.message_timer = pygame.time.get_ticks()
-            return False
-
-        # Configurar conexão P2P como cliente
-        self.p2p_manager = P2PManager(host=False)
-        self.p2p_manager.register_message_callback(self.on_message_received)
-        self.p2p_manager.register_connection_callback(on_player_connected)
-        self.p2p_manager.register_disconnection_callback(self.on_player_disconnected)
-        self.p2p_manager.start()
-
-        # Conectar ao host
-        connect_success, connection_message = self.p2p_manager.connect_to_host(host_address)
-        if not connect_success:
-            self.error_message = f"Erro ao conectar ao host: {connection_message}"
-            self.message_timer = pygame.time.get_ticks()
-            return False
-
-        # Enviar solicitação para entrar na sala
-        join_message = Message.create_join_request(
-            self.player.player_id,
-            self.player.name,
-        )
-        self.p2p_manager.send_message(join_message)
-
-        # Juntar-se ao jogo no serviço de matchmaking
-        self.matchmaking_service.join_game(room_id, self.player_name)
-
-        # Aguardar resposta do host (será tratada em on_message_received)
-        self.room_id = room_id
-        return True
 
     def connect_to_local_room(self, room_id, password=""):
         """Conectar a uma sala na rede local usando o ID da sala"""
@@ -954,9 +853,9 @@ class Room:
             local_rect = pygame.Rect(form_x + 270, y_offset + 40, 200, 40)
 
             if online_rect.collidepoint(mouse_pos):
-                self.view_manager.connection_mode_selection = "online"
+                self.view_manager.connection_mode = "online"
             elif local_rect.collidepoint(mouse_pos):
-                self.view_manager.connection_mode_selection = "local"
+                self.view_manager.connection_mode = "local"
 
             # Botão Buscar Salas
             button_width = 200
@@ -965,7 +864,7 @@ class Room:
             browse_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 310, button_y, button_width, button_height)
             if browse_button.collidepoint(mouse_pos):
                 self.view_manager.set_view("ROOM_BROWSER")
-                self.view_manager.connection_mode = self.view_manager.connection_mode_selection
+                self.view_manager.connection_mode = self.view_manager.connection_mode
                 self.load_room_list(mode=self.view_manager.connection_mode)
                 return
 
@@ -1012,7 +911,7 @@ class Room:
 
         # Conectar à sala baseado no modo selecionado
         success = False
-        if self.view_manager.connection_mode_selection == "online":
+        if self.view_manager.connection_mode == "online":
             success = self.connect_to_online_room(self.room_id_input, self.password_input)
         else:
             success = self.connect_to_local_room(self.room_id_input, self.password_input)
@@ -1036,7 +935,7 @@ class Room:
         self.room_id_input_active = True
         self.password_input = ""
         self.password_input_active = False
-        self.view_manager.connection_mode_selection = "online"  # Padrão: online
+        self.view_manager.connection_mode = "online"  # Padrão: online
 
     def on_message_received(self, sender_id, message):
         """Callback para mensagens recebidas"""
@@ -1288,3 +1187,65 @@ class Room:
             self.broadcast_game_state()
         else:
             print(f"Erro ao iniciar o jogo: {message}")
+
+    def handle_event(self, event):
+        """Processa eventos da interface"""
+        
+        # Eventos para a tela de criar sala
+        if self.current_view == "CREATE_ROOM":
+            # Processamento de input de texto
+            if event.type == pygame.KEYDOWN:
+                if self.room_name_input_active:
+                    if event.key == pygame.K_RETURN:
+                        self.room_name_input_active = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.room_name_input = self.room_name_input[:-1]
+                    else:
+                        # Adicionar caracter ao nome da sala
+                        if len(self.room_name_input) < 20:  # Limite de 20 caracteres
+                            self.room_name_input += event.unicode
+                
+                elif self.password_input_active:
+                    if event.key == pygame.K_RETURN:
+                        self.password_input_active = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        self.password_input = self.password_input[:-1]
+                    else:
+                        # Adicionar caracter à senha
+                        if len(self.password_input) < 20:  # Limite de 20 caracteres
+                            self.password_input += event.unicode
+            
+            # Cliques do mouse
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # Coordenadas do form
+                form_width = 500
+                form_x = config.SCREEN_WIDTH // 2 - form_width // 2
+                form_y = 150
+                
+                # Verifica clique no campo de nome da sala
+                name_box = pygame.Rect(form_x + 30, form_y + 30 + 40, 440, 40)
+                if name_box.collidepoint(event.pos):
+                    self.room_name_input_active = True
+                    self.password_input_active = False
+                
+                # Verifica clique no campo de senha
+                password_box = pygame.Rect(form_x + 30, form_y + 30 + 100 + 40, 440, 40)
+                if password_box.collidepoint(event.pos):
+                    self.password_input_active = True
+                    self.room_name_input_active = False
+                
+                # Verifica clique fora dos campos para desativar inputs
+                if not name_box.collidepoint(event.pos) and not password_box.collidepoint(event.pos):
+                    self.room_name_input_active = False
+                    self.password_input_active = False
+                
+                # Botão Voltar
+                back_button = pygame.Rect(config.SCREEN_WIDTH // 2 - 310, 500, 200, 50)
+                if back_button.collidepoint(event.pos):
+                    self.view_manager.set_view("MENU")
+                    self.reset_room_data()
+                
+                # Botão Criar Sala
+                create_button = pygame.Rect(config.SCREEN_WIDTH // 2 + 110, 500, 200, 50)
+                if create_button.collidepoint(event.pos):
+                    self.create_room()

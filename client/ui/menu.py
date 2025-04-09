@@ -7,7 +7,7 @@ from client.ui.view_manager import ViewManager
 
 
 class Menu:
-    def __init__(self, screen, player_name, player_balance, view_manager):
+    def __init__(self, screen, player_name, player_balance, view_manager, server_available=False):
         self.screen = screen
         self.show_tutorial = False
         self.title_font = pygame.font.SysFont("Arial", 48)
@@ -18,6 +18,7 @@ class Menu:
         self.player_name = player_name
         self.player_balance = player_balance
         self.view_manager = view_manager
+        self.server_available = server_available
 
 
     def handle_menu_event(self, event):
@@ -30,7 +31,11 @@ class Menu:
         play_online_rect = pygame.Rect((config.SCREEN_WIDTH - 250) // 2, 280 + 50 + 20, 250, 50)
         if event.type == pygame.MOUSEBUTTONDOWN and play_online_rect.collidepoint(event.pos):
             if not self.name_input_active:
-                self.handle_online_click()
+                # Só permitir clique no botão online se o servidor estiver disponível
+                if self.server_available:
+                    self.handle_online_click()
+                else:
+                    print("Servidor online não disponível. Inicie o servidor primeiro.")
                 return
 
         play_local_rect = pygame.Rect((config.SCREEN_WIDTH - 250) // 2, 280 + 2 * (50 + 20), 250, 50)
@@ -280,18 +285,30 @@ class Menu:
         """Desenha os botões do menu principal"""
 
         # Função auxiliar para desenhar botões
-        def draw_menu_button(rect, text, color, hover_color=(0, 120, 255)):
+        def draw_menu_button(rect, text, color, hover_color=(0, 120, 255), disabled=False, status_text=None):
             mouse_pos = pygame.mouse.get_pos()
-            button_color = hover_color if rect.collidepoint(mouse_pos) else color
+            
+            if disabled:
+                button_color = (100, 100, 100)  # Cinza para botões desabilitados
+            else:
+                button_color = hover_color if rect.collidepoint(mouse_pos) else color
 
             # Desenhar botão com cantos arredondados
             pygame.draw.rect(self.screen, button_color, rect, border_radius=10)
             pygame.draw.rect(self.screen, config.WHITE, rect, 2, border_radius=10)
 
             # Texto do botão
-            button_text = self.medium_font.render(text, True, config.WHITE)
+            text_color = (180, 180, 180) if disabled else config.WHITE
+            button_text = self.medium_font.render(text, True, text_color)
             text_rect = button_text.get_rect(center=rect.center)
             self.screen.blit(button_text, text_rect)
+            
+            # Status adicional (online/offline)
+            if status_text:
+                status_color = (0, 200, 0) if status_text == "Online" else (200, 0, 0)
+                status = self.small_font.render(status_text, True, status_color)
+                status_rect = status.get_rect(topright=(rect.right - 5, rect.bottom + 2))
+                self.screen.blit(status, status_rect)
 
         # Posicionamento dos botões
         button_width = 250
@@ -311,7 +328,14 @@ class Menu:
                                        start_y + button_height + button_spacing,
                                        button_width,
                                        button_height)
-        draw_menu_button(play_online_rect, "Jogar Online", (0, 80, 150), (0, 100, 200))
+        online_status = "Online" if self.server_available else "Offline"
+        draw_menu_button(
+            play_online_rect, 
+            "Jogar Online", 
+            (0, 80, 150), (0, 100, 200), 
+            disabled=not self.server_available,
+            status_text=online_status
+        )
 
         # Botão Jogar na Rede Local
         play_local_rect = pygame.Rect((config.SCREEN_WIDTH - button_width) // 2,
